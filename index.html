@@ -127,8 +127,10 @@ footer { color: var(--soft); font-size: .76rem; line-height: 1.5; }
   body { padding: 0; font-size: 11px; }
   h1 { font-size: 1.3rem; }
   .card { box-shadow: none; }
-  .kpi, .cat, tr { break-inside: avoid; }
+  /* ojo: break-inside:avoid en MILES de <tr> cuelga la paginacion del PDF — solo tarjetas */
+  .kpi, .cat { break-inside: avoid; }
   .filtros, .mas, .btn, .pills, input[type=search], select, details { display: none !important; }
+  .printAviso { display: block !important; font-size: .75rem; color: var(--crit); font-weight: 700; margin: .3rem 0; }
   #printInfo { display: block !important; font-size: .8rem; color: var(--soft); margin: .1rem 0 .4rem; }
   .tabla-wrap { overflow: visible; }
   /* las tablas tienen que ENTRAR ENTERAS en la hoja: texto envuelto (sin nowrap), fuente chica,
@@ -153,7 +155,10 @@ footer { color: var(--soft); font-size: .76rem; line-height: 1.5; }
       <div class="meta" id="meta"></div>
       <div id="printInfo" style="display:none"></div>
     </div>
-    <button class="btn" id="btnPdf" title="Abre el diálogo de impresión: elegí 'Guardar como PDF'">🖨️ Exportar PDF</button>
+    <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+      <button class="btn" id="btnPdf" title="Abre el diálogo de impresión: elegí 'Guardar como PDF'">🖨️ Exportar PDF</button>
+      <button class="btn" id="btnCsv" title="Descarga el detalle de clientes completo (respeta los filtros) como planilla">⬇️ Descargar Excel</button>
+    </div>
   </header>
 
   <div class="card filtros">
@@ -190,6 +195,7 @@ footer { color: var(--soft); font-size: .76rem; line-height: 1.5; }
       <input type="search" id="q" placeholder="Buscar cliente, código o dirección…">
     </div>
     <div class="tabla-wrap"><table id="tCli"></table></div>
+    <div class="printAviso" id="avisoCli" style="display:none"></div>
     <div class="mas"><button class="btn" id="btnMas">Mostrar más</button> <span class="chip" id="chipCli"></span></div>
   </section>
 
@@ -215,6 +221,7 @@ footer { color: var(--soft); font-size: .76rem; line-height: 1.5; }
       <input type="search" id="qObj" placeholder="Buscar cliente, código o dirección…">
     </div>
     <div class="tabla-wrap"><table id="tObjCli"></table></div>
+    <div class="printAviso" id="avisoObjCli" style="display:none"></div>
     <div class="mas"><button class="btn" id="btnMasObj">Mostrar más</button> <span class="chip" id="chipObj"></span></div>
     <details style="margin-top:1.2rem">
       <summary style="cursor:pointer;font-size:.82rem;color:var(--soft);font-weight:600">Ver qué artículos componen cada objetivo</summary>
@@ -472,6 +479,8 @@ function render() {
     }).join('') + `</tbody>`;
   document.getElementById('chipCli').textContent = `${fmt(vis.length)} de ${fmt(lista.length)} clientes`;
   document.getElementById('btnMas').style.display = lista.length > S.tope ? '' : 'none';
+  document.getElementById('avisoCli').textContent = lista.length > vis.length
+    ? `⚠ Se imprimen ${fmt(vis.length)} de ${fmt(lista.length)} clientes. Para verlos todos: aplicá filtros (vendedora, ronda, marca) y exportá de nuevo, o usá el botón Descargar Excel.` : '';
 
   renderObjetivo(uni);
   renderObjetivoMes();
@@ -727,6 +736,8 @@ function renderObjetivo(uni) {
     }).join('') + `</tbody>`;
   document.getElementById('chipObj').textContent = `${fmt(vis.length)} de ${fmt(lista.length)} clientes`;
   document.getElementById('btnMasObj').style.display = lista.length > S.objTope ? '' : 'none';
+  document.getElementById('avisoObjCli').textContent = lista.length > vis.length
+    ? `⚠ Se imprimen ${fmt(vis.length)} de ${fmt(lista.length)} clientes del bimestre. Filtrá para un PDF completo.` : '';
 }
 
 // ---------- filtros ----------
@@ -798,12 +809,15 @@ document.getElementById('btnMas').onclick = () => { S.tope += 400; render(); };
 // exportar a PDF: abre el dialogo de impresion del navegador (elegir "Guardar como PDF");
 // los estilos @media print arman la version imprimible
 document.getElementById('btnPdf').onclick = () => window.print();
-// al imprimir se expanden TODAS las filas (el PDF lleva la info completa, no solo lo visible);
-// al cerrar el dialogo se vuelve a los topes normales para no dejar la pagina pesada
+// al imprimir se expanden las filas hasta un tope seguro: expandir TODO (4.500 filas x 24
+// celdas x 2 tablas = ~270.000 nodos) cuelga el generador de PDF del navegador — probado.
+// Si la lista supera el tope, el PDF lleva un aviso; el listado entero sale por Descargar Excel.
+const PRINT_MAX = 1200;
 let topesPrevios = null;
 window.addEventListener('beforeprint', () => {
   topesPrevios = { tope: S.tope, artTope: S.artTope, objTope: S.objTope };
-  S.tope = S.artTope = S.objTope = 1e9;
+  S.tope = S.objTope = Math.max(PRINT_MAX, S.tope, S.objTope);
+  S.artTope = 1e9;
   render();
 });
 window.addEventListener('afterprint', () => {
@@ -812,6 +826,32 @@ window.addEventListener('afterprint', () => {
   topesPrevios = null;
   render();
 });
+
+// descargar Excel (CSV con ; y BOM, listo para Excel es-AR): detalle de clientes COMPLETO
+// respetando los filtros activos, con unidades por marca e importes
+document.getElementById('btnCsv').onclick = () => {
+  const uni = universo();
+  const numAr = x => String(Math.round(x * 100) / 100).replace('.', ',');
+  const esc = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
+  const filas = [['Código', 'Cliente', 'Dirección', 'Vendedora', 'Equipo', 'Días de visita',
+    ...CATS.map(c => c.nombre + ' (u.)'), 'Unidades', 'Venta neta', 'Venta c/IVA'].map(esc).join(';')];
+  for (const [v, idx] of uni) {
+    const c = D.clis[idx], a = unidSel(idx);
+    const cs = (D.cartera[v] || []).indexOf(idx);
+    const mask = cs >= 0 ? (D.carteraDias[v] || [])[cs] : 0;
+    filas.push([c[0], c[1], c[2], D.vends[v].nombre, D.vends[v].equipo,
+      DIAS.filter((_, i) => mask & (1 << i)).join(' '),
+      ...a.map(numAr), numAr(a.reduce((s, x) => s + x, 0)), numAr(netoSel(idx)), numAr(tIvaSel(idx))].map(esc).join(';'));
+  }
+  const blob = new Blob(['\ufeff' + filas.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const aEl = document.createElement('a');
+  aEl.href = URL.createObjectURL(blob);
+  aEl.download = 'georgalos_clientes.csv';
+  document.body.appendChild(aEl);
+  aEl.click();
+  aEl.remove();
+  URL.revokeObjectURL(aEl.href);
+};
 
 // ---------- eventos de venta por articulo ----------
 document.getElementById('qArt').oninput = e => { S.artQ = e.target.value; S.artTope = 50; render(); };
