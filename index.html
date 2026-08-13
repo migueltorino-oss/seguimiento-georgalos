@@ -130,7 +130,11 @@ footer { color: var(--soft); font-size: .76rem; line-height: 1.5; }
   /* ojo: break-inside:avoid en MILES de <tr> cuelga la paginacion del PDF — solo tarjetas */
   .kpi, .cat { break-inside: avoid; }
   .filtros, .mas, .btn, .pills, input[type=search], select, details { display: none !important; }
-  #secObj { display: none !important; } /* el incentivo bimestral NO va al PDF (pedido del usuario) */
+  /* PDF general (boton del header): todo MENOS el incentivo bimestral */
+  #secObj { display: none !important; }
+  /* PDF del incentivo (boton de la seccion, body[data-print=bim]): SOLO el header y el bimestral */
+  body[data-print="bim"] .wrap > :not(header):not(#secObj) { display: none !important; }
+  body[data-print="bim"] #secObj { display: block !important; }
   .printAviso { display: block !important; font-size: .75rem; color: var(--crit); font-weight: 700; margin: .3rem 0; }
   #printInfo { display: block !important; font-size: .8rem; color: var(--soft); margin: .1rem 0 .4rem; }
   .tabla-wrap { overflow: visible; }
@@ -211,7 +215,10 @@ footer { color: var(--soft); font-size: .76rem; line-height: 1.5; }
   </section>
 
   <section class="card" id="secObj" style="display:none">
-    <h2 id="tituloObj"></h2>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.8rem;flex-wrap:wrap">
+      <h2 id="tituloObj" style="margin:0 0 .2rem"></h2>
+      <button class="btn" id="btnPdfObj" title="Exporta a PDF solo el incentivo bimestral">🖨️ Exportar PDF del incentivo</button>
+    </div>
     <p class="hint" id="hintObj"></p>
     <div class="cats" id="objCards"></div>
     <div class="tabla-wrap" style="margin-top:1rem"><table id="tObj"></table></div>
@@ -257,6 +264,7 @@ const etiFecha = ymd => `${+ymd.slice(8, 10)}/${+ymd.slice(5, 7)}`;
 const unMes = () => S.meses.length === 1 ? S.meses[0] : null;
 const etiSel = () => S.meses.map(m => D.etiquetas[m]).join(' + ');
 
+let PRINTING = false; // en impresion el detalle de clientes se arma compacto (ver beforeprint)
 const mesPrev = m => { const i = D.meses.indexOf(m); return i > 0 ? D.meses[i - 1] : null; };
 const equipoDe = v => (D.vends[v] || {}).equipo;
 const vendsDelFiltro = () => Object.keys(D.vends).filter(v =>
@@ -820,21 +828,22 @@ document.querySelectorAll('[data-est]').forEach(b => b.onclick = () => {
 });
 document.getElementById('q').oninput = e => { S.q = e.target.value; S.tope = 200; render(); };
 document.getElementById('btnMas').onclick = () => { S.tope += 400; render(); };
-// exportar a PDF: abre el dialogo de impresion del navegador (elegir "Guardar como PDF");
-// los estilos @media print arman la version imprimible
+// exportar a PDF: dos modos. El boton del header imprime TODO menos el incentivo bimestral
+// (con el detalle de clientes completo, en formato compacto); el boton de la seccion del
+// incentivo (data-print=bim) imprime SOLO esa seccion con sus clientes completos.
 document.getElementById('btnPdf').onclick = () => window.print();
-// al imprimir se expanden las filas hasta un tope seguro: expandir TODO (4.500 filas x 24
-// celdas x 2 tablas = ~270.000 nodos) cuelga el generador de PDF del navegador — probado.
-// Si la lista supera el tope, el PDF lleva un aviso; el listado entero sale por Descargar Excel.
-const PRINT_MAX = 1200;
+document.getElementById('btnPdfObj').onclick = () => { document.body.dataset.print = 'bim'; window.print(); };
 let topesPrevios = null;
 window.addEventListener('beforeprint', () => {
+  PRINTING = true;
   topesPrevios = { tope: S.tope, artTope: S.artTope, objTope: S.objTope };
-  S.tope = S.objTope = Math.max(PRINT_MAX, S.tope, S.objTope);
-  S.artTope = 1e9;
+  if (document.body.dataset.print === 'bim') S.objTope = 1e9;
+  else { S.tope = 1e9; S.artTope = 1e9; }
   render();
 });
 window.addEventListener('afterprint', () => {
+  PRINTING = false;
+  delete document.body.dataset.print;
   if (!topesPrevios) return;
   S.tope = topesPrevios.tope; S.artTope = topesPrevios.artTope; S.objTope = topesPrevios.objTope;
   topesPrevios = null;
