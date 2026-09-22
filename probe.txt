@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seguimiento de Coberturas · Georgalos</title>
+<style>
+:root {
+  --bg: #F7F3EC; --card: #FFFFFF; --ink: #241C18; --soft: #6B5F58; --line: #E2D8CB;
+  --accent: #C1272D; --accent-soft: #FAE7E4; --accent-ink: #8E1A20;
+  --ok: #2F7D4F; --ok-bg: #E3F1E7; --warn: #A97318; --warn-bg: #F8EEDB; --crit: #B23A2B; --crit-bg: #FAE6E1;
+  --neutral: #9A9086; --grid: #F1EAE0;
+  /* serie 2025 / 2026 del histórico (par validado para daltonismo sobre fondo claro) */
+  --s25: #0E9488; --s26: #C1272D;
+  --shadow: 0 1px 2px rgba(36,28,24,.06), 0 6px 20px rgba(36,28,24,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171310; --card: #201A16; --ink: #EFE7DE; --soft: #A2968C; --line: #3A302A;
+    --accent: #E4655F; --accent-soft: #3A211F; --accent-ink: #F0908B;
+    --ok: #6EC08A; --ok-bg: #1E3527; --warn: #D8A44E; --warn-bg: #3A2E16; --crit: #E38273; --cr
