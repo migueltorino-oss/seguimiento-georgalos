@@ -853,7 +853,7 @@ function bimAuto() {
     const n = S.meses.filter(m => b.meses.includes(m)).length;
     if (n > 0 && n >= mejorN) { mejor = i; mejorN = n; } // empate: gana el más nuevo (van ordenados)
   });
-  return mejor >= 0 ? mejor : BIMS.length - 1;
+  return mejor; // -1 = ningún mes tildado tiene incentivo (ej. noviembre 26): la sección se oculta
 }
 let B = null, NG = 0, BZERO = []; // BZERO = [unid. total, grupos..., neto $]
 function setBim(bi) {
@@ -865,8 +865,10 @@ const bimU = idx => (B.cli[idx] || BZERO);
 const claseAv = a => a >= 1 ? 'ok' : a >= .6 ? 'warn' : 'crit';
 
 function renderObjetivo(uni) {
-  setBim(S.bim == null ? bimAuto() : S.bim);
-  if (!B) return;
+  // sin incentivo en los meses tildados no se muestra ninguno (pedido 3/11/26: noviembre no tiene)
+  const auto = bimAuto();
+  setBim(auto < 0 ? -1 : S.bim == null ? auto : S.bim);
+  if (!B) { document.getElementById('secObj').style.display = 'none'; return; }
   document.getElementById('secObj').style.display = '';
   // pastillas para saltar de un bimestre a otro (solo si hay más de uno cargado)
   const fb = document.getElementById('fBim');
